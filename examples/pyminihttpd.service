@@ -1,0 +1,9 @@
+[Unit]
+Description=Minimal HTTP server
+Wants=pyminihttpd.socket
+
+[Service]
+ExecStart=/usr/local/bin/pyminihttpd
+User=www-data
+Environment=PYTHONUNBUFFERED=1
+Type=notify

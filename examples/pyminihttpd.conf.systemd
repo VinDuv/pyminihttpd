@@ -1,0 +1,8 @@
+[server]
+listen = sd:1
+listen_ssl =
+ssl_cert =
+ssl_key =
+
+[routes]
+/ = static:/var/www/html/

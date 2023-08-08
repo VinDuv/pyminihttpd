@@ -1,0 +1,10 @@
+[Unit]
+Before=pyminihttpd.service
+BindsTo=pyminihttpd.service
+RefuseManualStart=yes
+RefuseManualStop=yes
+
+[Socket]
+ListenStream=80
+ListenStream=443
+
