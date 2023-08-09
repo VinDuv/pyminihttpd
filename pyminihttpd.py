@@ -755,7 +755,9 @@ class RequestDispatcher:
 
                 try:
                     conn, addr = sock.accept()
-                except ssl.SSLError:
+                except OSError as err:
+                    print(f"Connection accept error: {err}", file=sys.stderr,
+                        flush=True)
                     continue
 
                 self._handle_conn(conn, addr)
