@@ -16,7 +16,7 @@ Features
  - Multi-route support, can serve different directories/scripts on different
    URLs
  - Basic WSGI support
- - systemd integration (notify and socket activation)
+ - systemd integration (notify, socket activation, and credentials)
 
 Installation and usage
 ----------------------
@@ -70,6 +70,24 @@ The `listen_ssl` works like the `listen` option but enables SSL support for
 HTTPS on the connections. If it is used, the `ssl_cert` and `ssl_key` options
 must be specified, to indicate the path the the certificate and key files to
 use.
+
+The systemd credential store can be used to load the certificate and key files.
+This allows the server to access them without needing read permissions to them.
+To use it, add `LoadCredential` to the `.service` file, for instance:
+```
+[Service]
+...
+LoadCredential=cert:/path/to/cert.pem
+LoadCredential=key:/path/to/key.pem
+```
+
+and specify `sd:<identifier>` in the server configuration for the file:
+```
+[server]
+...
+ssl_cert = sd:cert
+ssl_key = sd:key
+```
 
 The usual configuration for a HTTP-only server will be:
 ```

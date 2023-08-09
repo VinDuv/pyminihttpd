@@ -583,16 +583,20 @@ class Configuration(typing.NamedTuple):
 
         return listeners
 
-    @staticmethod
-    def _get_ssl_context(parser):
+    @classmethod
+    def _get_ssl_context(cls, parser):
         """
         Instantatiate a SSL context based on the configuration.
         Returns None if the configuration does not specifies the key/certificate
         to use.
         """
 
-        cert = parser.get('server', 'ssl_cert', fallback='').strip()
-        key = parser.get('server', 'ssl_key', fallback='').strip()
+        cred_dir = os.environ.get('CREDENTIALS_DIRECTORY')
+        if cred_dir is not None:
+            cred_dir = pathlib.Path(cred_dir)
+
+        cert = cls._get_path(parser, cred_dir, 'ssl_cert')
+        key = cls._get_path(parser, cred_dir, 'ssl_key')
 
         if cert and key:
             context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -659,6 +663,27 @@ class Configuration(typing.NamedTuple):
 
         return file_routes, dir_routes
 
+    @staticmethod
+    def _get_path(parser, cred_dir, name):
+        """
+        Get a path for a configuration item.
+        If the configuration specifies a systemd credential file, the path to
+        the crendential is resolved.
+        """
+
+        value = parser.get('server', name, fallback='').strip()
+        if not value.startswith('sd:'):
+            return value
+
+        cred_id = value[3:].strip()
+        if cred_dir is None:
+            raise ValueError(f"{name}: Unable to load {value}: The systemd "
+                "credential store is not available")
+
+        if '/' in cred_id or cred_id in {'', '.', '..'}:
+            raise ValueError(f"{name}: Invalid credential ID {cred_id!r}")
+
+        return str(cred_dir / cred_id)
 
 class RequestDispatcher:
     """
