@@ -452,6 +452,8 @@ class Configuration(typing.NamedTuple):
     This object holds the result of parsing of the configuration file.
     """
 
+    DEFAULT_HSTS_DURATION = 31536000
+
     class ListenAddress(typing.NamedTuple):
         """
         Listen address for a socket
@@ -516,6 +518,7 @@ class Configuration(typing.NamedTuple):
     file_routes: typing.Dict[str, BaseHTTPRequestHandler]
     dir_routes: typing.List[typing.Tuple[str, BaseHTTPRequestHandler]]
     max_threads: int
+    hsts_duration: int
 
     @classmethod
     def from_file(cls, path):
@@ -533,6 +536,7 @@ class Configuration(typing.NamedTuple):
             ssl_context = cls._get_ssl_context(parser)
             max_threads = cls._get_max_threads(parser)
             file_routes, dir_routes = cls._get_routes(parser)
+            hsts_duration = cls._get_hsts_duration(parser)
 
             if not listeners and not ssl_listeners:
                 raise ValueError("No listen addresses specified.")
@@ -545,7 +549,7 @@ class Configuration(typing.NamedTuple):
             sys.exit(f"Error reading configuration {path}: {err}")
 
         return cls(listeners, ssl_listeners, ssl_context, file_routes,
-            dir_routes, max_threads)
+            dir_routes, max_threads, hsts_duration)
 
     def create_sockets(self):
         """
@@ -663,6 +667,28 @@ class Configuration(typing.NamedTuple):
 
         return file_routes, dir_routes
 
+    @classmethod
+    def _get_hsts_duration(cls, parser):
+        """
+        Gets the HSTS duration provided in the configuration.
+        """
+
+        raw_value = parser.get('server', 'hsts', fallback='').strip().lower()
+        if raw_value in {'y', 'yes', 'true', '1', 'enabled'}:
+            value = cls.DEFAULT_HSTS_DURATION
+        elif raw_value in {'', 'n', 'no', 'false', '0', 'disabled'}:
+            value = 0
+        else:
+            try:
+                value = int(raw_value, 10)
+            except ValueError:
+                value = -1
+
+            if value < 0:
+                raise ValueError(f"hsts: Invalid value {raw_value!r}")
+
+        return value
+
     @staticmethod
     def _get_path(parser, cred_dir, name):
         """
@@ -698,7 +724,7 @@ class RequestDispatcher:
 
         server_version = "pyminihttpd"
 
-        def __init__(self, conn, addr, dispatcher):
+        def __init__(self, conn, addr, dispatcher, config):
             # The request is processed in super().__init__ so these attributes
             # need to be set beforehand.
             info = conn.getsockname()
@@ -706,7 +732,19 @@ class RequestDispatcher:
             self.local_port = info[1]
             self.is_https = isinstance(conn, ssl.SSLSocket)
 
+            if config.hsts_duration > 0:
+                self._hsts = f'max-age={config.hsts_duration}'
+            else:
+                self._hsts = None
+
             super().__init__(conn, addr, dispatcher)
+
+        def end_headers(self):
+            # Add the HSTS header if needed, before finalising the headers
+            if self._hsts is not None:
+                self.send_header('Strict-Transport-Security', self._hsts)
+
+            super().end_headers()
 
         # Naming required by the superclass
         # pylint: disable-next=invalid-name
@@ -754,9 +792,7 @@ class RequestDispatcher:
         self._sockets = config.create_sockets()
         self._selector = selectors.DefaultSelector()
         self._threads = []
-        self._max_threads = config.max_threads
-        self._file_routes = config.file_routes
-        self._dir_routes = config.dir_routes
+        self._config = config
         self._err_sock = socket.socketpair()
 
     def run(self):
@@ -833,7 +869,7 @@ class RequestDispatcher:
         is_dir_path = raw_path.endswith('/')
 
         # Try to find a file handler first
-        handler = self._file_routes.get(norm_path)
+        handler = self._config.file_routes.get(norm_path)
         prefix = norm_path
         rest = ''
 
@@ -847,7 +883,7 @@ class RequestDispatcher:
             if is_dir_path:
                 norm_path = norm_path_slash
 
-            for candidate_prefix, candidate_handler in self._dir_routes:
+            for candidate_prefix, candidate_handler in self._config.dir_routes:
                 if norm_path.startswith(candidate_prefix):
                     handler = candidate_handler
                     prefix = norm_path[:len(candidate_prefix) - 1]
@@ -875,7 +911,7 @@ class RequestDispatcher:
         """
 
         self._cleanup_threads()
-        while len(self._threads) >= self._max_threads:
+        while len(self._threads) >= self._config.max_threads:
             time.sleep(.5)
             self._cleanup_threads()
 
@@ -891,7 +927,7 @@ class RequestDispatcher:
         """
 
         try:
-            self.DispatcherHandler(conn, addr, self)
+            self.DispatcherHandler(conn, addr, self, self._config)
             try:
                 conn.shutdown(socket.SHUT_WR)
             except OSError:

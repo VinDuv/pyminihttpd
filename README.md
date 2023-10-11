@@ -128,6 +128,14 @@ ssl_cert = /path/to/cert.pem
 ssl_key = /path/to/key.pem
 ```
 
+The optional `hsts` parameter enables HSTS (HTTP Strict Transport Security).
+Setting it to a numerical positive value sets the number of seconds of the HSTS
+`max-age` parameter. Setting it to a true value (`yes`, `y`, `true`, …) enables
+it with a default `max-age` value (1 year).
+If this parameter is enabled, compliant browsers will redirect HTTP request to
+HTTPS requests; for this to work correctly, pyminihttpd (or another Web server)
+need to listen for HTTPS request on port 443.
+
 ### [routes] section
 
 The `[routes]` sections describes the routing between a URL and a static
