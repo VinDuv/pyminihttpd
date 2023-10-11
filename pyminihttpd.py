@@ -527,9 +527,17 @@ class Configuration(typing.NamedTuple):
         """
 
         parser = configparser.ConfigParser()
+
+        # Disable lowercasing of keys
+        parser.optionxform = lambda option: option
+
         try:
             with open(path, 'r', encoding='utf-8') as fdesc:
                 parser.read_file(fdesc, path)
+
+            # Set up environment variables before parsing routes, since that
+            # will trigger the load of WSGI scripts
+            cls._setup_env_vars(parser)
 
             listeners = cls._get_listeners(parser, 'listen')
             ssl_listeners = cls._get_listeners(parser, 'listen_ssl')
@@ -688,6 +696,24 @@ class Configuration(typing.NamedTuple):
                 raise ValueError(f"hsts: Invalid value {raw_value!r}")
 
         return value
+
+    @staticmethod
+    def _setup_env_vars(parser):
+        """
+        Sets up the environment variables provided in the configuration.
+        """
+
+        key_re = re.compile(r'^[A-Za-z0-9_]+$')
+
+        try:
+            section = parser['environ']
+        except KeyError:
+            return
+
+        for key, value in section.items():
+            if not key_re.match(key):
+                raise ValueError(f"[environ]: Invalid key {key!r}")
+            os.environ[key] = value
 
     @staticmethod
     def _get_path(parser, cred_dir, name):

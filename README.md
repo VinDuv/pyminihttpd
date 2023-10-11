@@ -192,6 +192,24 @@ Web server for this purpose)
 WSGI destinations are allowed with both directory and file URLs (although most
 complex WSGI applications will probably require a directory URL).
 
+### `[environ]` section
+This optional section allows setting environment variables in the context of
+the Web server. This may be useful for WSGI scripts that use environment
+variables for configuration. Note that these environment variable will affect
+the Web server itself, the WSGI scripts, as well as any other process started
+by WSGI scripts.
+
+The syntax is:
+```
+[environ]
+SOME_VAR = some value
+```
+
+Note that quotes are not needed, and should not be used, around values (they
+will get included literally in the variable value). Whitespace around the value
+is stripped. You can include newlines in the value by continuing the value on
+the next line, prefixed with a tab character.
+
 TODO
 ----
 - [ ] Implement a thread pool to reuse handler threads between requests
