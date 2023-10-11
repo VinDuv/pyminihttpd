@@ -277,7 +277,7 @@ class WSGIURLPrefixHandler(URLPrefixHandler):
                 for data in result:
                     self._write(data)
             finally:
-                close_func = getattr(result, 'close')
+                close_func = getattr(result, 'close', None)
                 if close_func is not None:
                     close_func()
 
@@ -880,7 +880,7 @@ class RequestDispatcher:
             self._cleanup_threads()
 
         thread = threading.Thread(target=self._handle_conn_thread,
-            name=f"Conn-Handler-{addr}", args=(conn, addr),
+            name=f"Conn-Handler-{addr[0]}-{addr[1]}", args=(conn, addr),
             daemon=True)
         self._threads.append(thread)
         thread.start()
@@ -896,8 +896,9 @@ class RequestDispatcher:
                 conn.shutdown(socket.SHUT_WR)
             except OSError:
                 pass
-        except ConnectionResetError:
-            pass
+        except (ConnectionResetError, BrokenPipeError, ssl.SSLError) as err:
+            print(f"Protocol error from {addr[0]}:{addr[1]}: {err}",
+                file=sys.stderr, flush=True)
         except Exception:
             # Will notify self._err_sock[1], stopping the main thread
             # This is thread safe and can safely be done multiple times
