@@ -453,6 +453,8 @@ class Configuration(typing.NamedTuple):
     """
 
     DEFAULT_HSTS_DURATION = 31536000
+    DEFAULT_TIMEOUT = 30
+    MIN_TIMEOUT = 2
 
     class ListenAddress(typing.NamedTuple):
         """
@@ -519,6 +521,7 @@ class Configuration(typing.NamedTuple):
     dir_routes: typing.List[typing.Tuple[str, BaseHTTPRequestHandler]]
     max_threads: int
     hsts_duration: int
+    timeout: int
 
     @classmethod
     def from_file(cls, path):
@@ -545,6 +548,8 @@ class Configuration(typing.NamedTuple):
             max_threads = cls._get_max_threads(parser)
             file_routes, dir_routes = cls._get_routes(parser)
             hsts_duration = cls._get_hsts_duration(parser)
+            timeout = parser.getint('server', 'timeout',
+                fallback=cls.DEFAULT_TIMEOUT)
 
             if not listeners and not ssl_listeners:
                 raise ValueError("No listen addresses specified.")
@@ -553,11 +558,15 @@ class Configuration(typing.NamedTuple):
                 raise ValueError("listen_ssl requires ssl_cert and ssl_key "
                     "to be set.")
 
+            if timeout < cls.MIN_TIMEOUT:
+                raise ValueError(f"timeout is too short (min. "
+                    f"{cls.MIN_TIMEOUT} seconds)")
+
         except (ValueError, OSError) as err:
             sys.exit(f"Error reading configuration {path}: {err}")
 
         return cls(listeners, ssl_listeners, ssl_context, file_routes,
-            dir_routes, max_threads, hsts_duration)
+            dir_routes, max_threads, hsts_duration, timeout)
 
     def create_sockets(self):
         """
@@ -854,6 +863,7 @@ class RequestDispatcher:
                         flush=True)
                     continue
 
+                conn.settimeout(self._config.timeout)
                 self._handle_conn(conn, addr)
 
     def close(self):
@@ -965,7 +975,8 @@ class RequestDispatcher:
                 conn.shutdown(socket.SHUT_WR)
             except OSError:
                 pass
-        except (ConnectionResetError, BrokenPipeError, ssl.SSLError) as err:
+        except (ConnectionResetError, BrokenPipeError, TimeoutError,
+            ssl.SSLError) as err:
             print(f"Protocol error from {addr[0]}:{addr[1]}: {err}",
                 file=sys.stderr, flush=True)
         except Exception:

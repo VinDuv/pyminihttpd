@@ -136,6 +136,10 @@ If this parameter is enabled, compliant browsers will redirect HTTP request to
 HTTPS requests; for this to work correctly, pyminihttpd (or another Web server)
 need to listen for HTTPS request on port 443.
 
+The optional `timeout` parameter allows setting a timeout for socket operations;
+it prevents a client from keeping a thread slot busy indefinitely. The default
+timeout value is 30 seconds.
+
 ### [routes] section
 
 The `[routes]` sections describes the routing between a URL and a static
