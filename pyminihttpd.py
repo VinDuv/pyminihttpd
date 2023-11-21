@@ -570,7 +570,8 @@ class Configuration(typing.NamedTuple):
 
         for ssl_listener in self.ssl_listeners:
             raw_sock = ssl_listener.create_socket()
-            ssl_socket = self.ssl_context.wrap_socket(raw_sock, server_side=True)
+            ssl_socket = self.ssl_context.wrap_socket(raw_sock,
+                server_side=True, do_handshake_on_connect=False)
             sockets.append(ssl_socket)
 
         return sockets
@@ -763,6 +764,12 @@ class RequestDispatcher:
             else:
                 self._hsts = None
 
+            if self.is_https:
+                # Do the SSL handshake explicitly now that we are on a thread.
+                # (This is not strictly necessary, but allows proper logging
+                # of EOF errors during handshake)
+                conn.do_handshake()
+
             super().__init__(conn, addr, dispatcher)
 
         def end_headers(self):
@@ -842,7 +849,7 @@ class RequestDispatcher:
 
                 try:
                     conn, addr = sock.accept()
-                except OSError as err:
+                except ConnectionAbortedError as err:
                     print(f"Connection accept error: {err}", file=sys.stderr,
                         flush=True)
                     continue
