@@ -975,10 +975,9 @@ class RequestDispatcher:
                 conn.shutdown(socket.SHUT_WR)
             except OSError:
                 pass
-        except (ConnectionResetError, BrokenPipeError, TimeoutError,
-            ssl.SSLError) as err:
-            print(f"Protocol error from {addr[0]}:{addr[1]}: {err}",
-                file=sys.stderr, flush=True)
+        except OSError as err:
+            print(f"Error from {addr[0]}:{addr[1]}: {err}", file=sys.stderr,
+                flush=True)
         except Exception:
             # Will notify self._err_sock[1], stopping the main thread
             # This is thread safe and can safely be done multiple times
