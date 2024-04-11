@@ -105,6 +105,14 @@ class StaticURLPrefixHandler(URLPrefixHandler):
     def handle_get(self, handler, prefix, rest, query):
         # 'rest' is already normalized so directory traversal attacks are not
         # possible. It always starts with / unless it is empty.
+        norm_path = rest[1:]
+
+        # But it could contain a null byte…
+        if '\x00' in norm_path:
+            handler.send_error(HTTPStatus.BAD_REQUEST,
+                "Invalid character in path")
+            return
+
         full_path = self._base_path / url_unquote(rest[1:])
 
         try:
