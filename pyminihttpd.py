@@ -866,7 +866,7 @@ class RequestDispatcher:
 
                 try:
                     conn, addr = sock.accept()
-                except ConnectionAbortedError as err:
+                except (ConnectionAbortedError, ConnectionResetError) as err:
                     print(f"Connection accept error: {err}", file=sys.stderr,
                         flush=True)
                     continue
