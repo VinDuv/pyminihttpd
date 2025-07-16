@@ -20,6 +20,7 @@ import ipaddress
 import mimetypes
 import os
 import pathlib
+import posixpath
 import re
 import runpy
 import selectors
@@ -103,20 +104,33 @@ class StaticURLPrefixHandler(URLPrefixHandler):
         self._base_path = base_path
 
     def handle_get(self, handler, prefix, rest, query):
-        # 'rest' is already normalized so directory traversal attacks are not
-        # possible. It always starts with / unless it is empty.
-        norm_path = rest[1:]
+        # The path in 'rest' needs to be URL-decoded so that accessing
+        # /%C3%A9.html accesses the file é.html. That decoding may make / (%2f),
+        # . (%2e), or \x00 (%00) appear, which can cause directory traversal
+        # issues. Make sure to normalise the path properly.
 
-        # But it could contain a null byte…
+        decoded_path = url_unquote(rest)
+
+        # The ending slash, if any, will be removed by the normalizer
+        ends_with_slash = decoded_path.endswith('/')
+
+
+        # Pass an absolute path to normpath so the resulting path is fully
+        # normalised (no ../ at the start). The resulting path will always
+        # start with / or //, remove it before continuing
+        norm_path = posixpath.normpath(f'/{decoded_path}').lstrip('/')
+
+        # Check that no null bytes are present (would cause a ValueError when
+        # opening the file)
         if '\x00' in norm_path:
             handler.send_error(HTTPStatus.BAD_REQUEST,
                 "Invalid character in path")
             return
 
-        full_path = self._base_path / url_unquote(rest[1:])
+        full_path = self._base_path / norm_path
 
         try:
-            if rest.endswith('/'):
+            if ends_with_slash:
                 self._handle_dir(handler, full_path, prefix, rest)
             else:
                 self._handle_file(handler, full_path, prefix, rest)
